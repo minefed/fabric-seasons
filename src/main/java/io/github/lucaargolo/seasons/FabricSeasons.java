@@ -225,9 +225,8 @@ public class FabricSeasons implements ModInitializer {
             }else if(CONFIG.isSeasonTiedWithSystemTime()) {
                 return getCurrentSystemSeason();
             }else if(CONFIG.isValidStartingSeason() && springLength >= 0 && summerLength >= 0 && fallLength >= 0 && winterLength >= 0) {
-                long[] seasonLengthArray = new long[]{springLength, summerLength, fallLength, winterLength};
-                Season[] seasonArray = new Season[]{Season.SPRING, Season.SUMMER,  Season.FALL, Season.WINTER};
-
+                // Same arithmetic as getTimeToNextSeason, without allocating the two lookup arrays on
+                // every call (this runs for every biome lookup and every meshed block).
                 int startSeasonIndex = switch (CONFIG.getStartingSeason()) {
                     case SPRING -> 0;
                     case SUMMER -> 1;
@@ -235,24 +234,36 @@ public class FabricSeasons implements ModInitializer {
                     case WINTER -> 3;
                 };
 
-                long season1LimitYTD = seasonLengthArray[startSeasonIndex];
-                long season2LimitYTD = season1LimitYTD + seasonLengthArray[(startSeasonIndex + 1) % 4];
-                long season3LimitYTD = season2LimitYTD + seasonLengthArray[(startSeasonIndex + 2) % 4];
-                long yearLength = season3LimitYTD + seasonLengthArray[(startSeasonIndex + 3) % 4];
+                long season1LimitYTD = seasonLength(startSeasonIndex, springLength, summerLength, fallLength, winterLength);
+                long season2LimitYTD = season1LimitYTD + seasonLength((startSeasonIndex + 1) % 4, springLength, summerLength, fallLength, winterLength);
+                long season3LimitYTD = season2LimitYTD + seasonLength((startSeasonIndex + 2) % 4, springLength, summerLength, fallLength, winterLength);
+                long yearLength = season3LimitYTD + seasonLength((startSeasonIndex + 3) % 4, springLength, summerLength, fallLength, winterLength);
                 long timeOfYear = world.getTimeOfDay() % yearLength;
 
                 if(timeOfYear < season1LimitYTD) {
-                    return seasonArray[startSeasonIndex];
+                    return SEASON_ORDER[startSeasonIndex];
                 } else if(timeOfYear < season2LimitYTD) {
-                    return seasonArray[(startSeasonIndex + 1) % 4];
+                    return SEASON_ORDER[(startSeasonIndex + 1) % 4];
                 } else if (timeOfYear < season3LimitYTD) {
-                    return seasonArray[(startSeasonIndex + 2) % 4];
+                    return SEASON_ORDER[(startSeasonIndex + 2) % 4];
                 } else if (timeOfYear < yearLength) {
-                    return seasonArray[(startSeasonIndex + 3) % 4];
+                    return SEASON_ORDER[(startSeasonIndex + 3) % 4];
                 }
             }
         }
         return Season.SPRING;
+    }
+
+    // Never exposed or modified; index order matches the season length order below.
+    private static final Season[] SEASON_ORDER = new Season[]{Season.SPRING, Season.SUMMER,  Season.FALL, Season.WINTER};
+
+    private static long seasonLength(int seasonIndex, long springLength, long summerLength, long fallLength, long winterLength) {
+        return switch (seasonIndex) {
+            case 0 -> springLength;
+            case 1 -> summerLength;
+            case 2 -> fallLength;
+            default -> winterLength;
+        };
     }
 
     @Environment(EnvType.CLIENT)
