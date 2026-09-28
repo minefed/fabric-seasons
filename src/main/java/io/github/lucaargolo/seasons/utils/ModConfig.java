@@ -5,6 +5,8 @@ import net.minecraft.util.Identifier;
 import net.minecraft.world.World;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @SuppressWarnings({"FieldMayBeFinal", "FieldCanBeLocal", "MismatchedQueryAndUpdateOfCollection", "unused"})
 public class ModConfig {
@@ -76,6 +78,13 @@ public class ModConfig {
 
     private boolean debugCommandEnabled = false;
 
+    // Memoized list lookups. Transient so Gson never reads or writes them, and per instance so every
+    // FabricSeasons.CONFIG assignment (file load, server config, reconnect) starts with empty caches.
+    // Concurrent because biome lookups run on server, render and chunk builder threads.
+    private final transient Map<Identifier, Boolean> biomeDenylistCache = new ConcurrentHashMap<>();
+    private final transient Map<Identifier, Boolean> biomeForceSnowCache = new ConcurrentHashMap<>();
+    private final transient Map<RegistryKey<World>, Boolean> dimensionAllowlistCache = new ConcurrentHashMap<>();
+
     public boolean shouldNotifyCompat() {
         return notifyCompat;
     }
@@ -97,11 +106,25 @@ public class ModConfig {
     }
 
     public boolean doTemperatureChanges(Identifier biomeId) {
-        return doTemperatureChanges && !biomeDenylist.contains(biomeId.toString());
+        return doTemperatureChanges && !isInBiomeDenylist(biomeId);
+    }
+
+    private boolean isInBiomeDenylist(Identifier biomeId) {
+        Boolean cached = biomeDenylistCache.get(biomeId);
+        if(cached == null) {
+            cached = biomeDenylist.contains(biomeId.toString());
+            biomeDenylistCache.put(biomeId, cached);
+        }
+        return cached;
     }
 
     public boolean isSnowForcedInBiome(Identifier biomeId) {
-        return biomeForceSnowInWinterList.contains(biomeId.toString());
+        Boolean cached = biomeForceSnowCache.get(biomeId);
+        if(cached == null) {
+            cached = biomeForceSnowInWinterList.contains(biomeId.toString());
+            biomeForceSnowCache.put(biomeId, cached);
+        }
+        return cached;
     }
 
     public boolean shouldSnowReplaceVegetation() {
@@ -168,7 +191,12 @@ public class ModConfig {
     }
 
     public boolean isValidInDimension(RegistryKey<World> dimension) {
-        return dimensionAllowlist.contains(dimension.getValue().toString());
+        Boolean cached = dimensionAllowlistCache.get(dimension);
+        if(cached == null) {
+            cached = dimensionAllowlist.contains(dimension.getValue().toString());
+            dimensionAllowlistCache.put(dimension, cached);
+        }
+        return cached;
     }
 
     public boolean isSeasonTiedWithSystemTime() {
