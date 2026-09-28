@@ -367,56 +367,76 @@ public class FabricSeasons implements ModInitializer {
         }
         Season season = FabricSeasons.getCurrentSeason(world);
 
-        Pair<Boolean, Float> modifiedWeather = getSeasonWeather(season, biomeId, originalWeather.hasPrecipitation, originalWeather.temperature);
-        currentWeather.hasPrecipitation = modifiedWeather.getLeft();
-        currentWeather.temperature = modifiedWeather.getRight();
+        if(season == null) {
+            // Only reachable with an invalid locked season in the config; keep the original path and its errors.
+            Pair<Boolean, Float> modifiedWeather = getSeasonWeather(season, biomeId, originalWeather.hasPrecipitation, originalWeather.temperature);
+            currentWeather.hasPrecipitation = modifiedWeather.getLeft();
+            currentWeather.temperature = modifiedWeather.getRight();
+            return;
+        }
+
+        // getSeasonWeather is a pure function of the config, season, biome id and original weather, so reuse
+        // the per biome table instead of recomputing it (and allocating a Pair) on every biome lookup.
+        ModConfig config = CONFIG;
+        BiomeMixed mixed = (BiomeMixed) (Object) biome;
+        SeasonalWeatherTable table = mixed.getSeasonalWeatherTable();
+        if (table == null || !table.matches(config, biomeId, originalWeather)) {
+            table = new SeasonalWeatherTable(config, biomeId, originalWeather);
+            mixed.setSeasonalWeatherTable(table);
+        }
+        currentWeather.hasPrecipitation = table.hasPrecipitation(season);
+        currentWeather.temperature = table.getTemperature(season);
     }
 
     public static Pair<Boolean, Float> getSeasonWeather(Season season, Identifier biomeId, Boolean hasPrecipitation, float temp) {
-        if(!CONFIG.doTemperatureChanges(biomeId)) {
+        return getSeasonWeather(CONFIG, season, biomeId, hasPrecipitation, temp);
+    }
+
+    public static Pair<Boolean, Float> getSeasonWeather(ModConfig config, Season season, Identifier biomeId, Boolean hasPrecipitation, float temp) {
+        if(!config.doTemperatureChanges(biomeId)) {
             return new Pair<>(hasPrecipitation, temp);
         }
-        if(CONFIG.isSnowForcedInBiome(biomeId) && season == Season.WINTER) {
+        if(config.isSnowForcedInBiome(biomeId) && season == Season.WINTER) {
             return new Pair<>(hasPrecipitation, 0.14f);
         }else if(temp <= -0.51) {
             //Permanently Frozen Biomes
             return switch (season) {
-                case SPRING -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.3f) : new Pair<>(hasPrecipitation, temp);
+                case SPRING -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.3f) : new Pair<>(hasPrecipitation, temp);
                 case SUMMER -> new Pair<>(hasPrecipitation, temp + 0.84f);
                 case WINTER -> new Pair<>(hasPrecipitation, temp - 0.7f);
-                case FALL -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.3f);
+                case FALL -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.3f);
             };
         }else if(temp <= 0.15) {
             //Usually Frozen Biomes
             return switch (season) {
-                case SPRING -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.25f) : new Pair<>(hasPrecipitation, temp);
-                case SUMMER -> new Pair<>(hasPrecipitation, temp + (CONFIG.shouldSnowyBiomesMeltInSummer() ? 0.66f : 0f));
+                case SPRING -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.25f) : new Pair<>(hasPrecipitation, temp);
+                case SUMMER -> new Pair<>(hasPrecipitation, temp + (config.shouldSnowyBiomesMeltInSummer() ? 0.66f : 0f));
                 case WINTER -> new Pair<>(hasPrecipitation, temp - 0.75f);
-                case FALL -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.25f);
+                case FALL -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.25f);
             };
         }else if(temp <= 0.49) {
             //Temparate Biomes
             return switch (season) {
-                case SPRING -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.16f) : new Pair<>(hasPrecipitation, temp);
+                case SPRING -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.16f) : new Pair<>(hasPrecipitation, temp);
                 case SUMMER -> new Pair<>(hasPrecipitation, temp + 0.66f);
                 case WINTER -> new Pair<>(hasPrecipitation, temp - 0.8f);
-                case FALL  -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.16f);
+                case FALL  -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.16f);
             };
         }else if(temp <= 0.79) {
             //Usually Ice Free Biomes
             return switch (season) {
-                case SPRING -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.34f) : new Pair<>(hasPrecipitation, temp);
+                case SPRING -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.34f) : new Pair<>(hasPrecipitation, temp);
                 case SUMMER -> new Pair<>(hasPrecipitation, temp + 0.46f);
                 case WINTER -> new Pair<>(hasPrecipitation, temp - 0.56f);
-                case FALL -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.34f);
+                case FALL -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.34f);
             };
         }else{
             // Ice Free Biomes
             return switch (season) {
-                case SPRING -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.34f) : new Pair<>(hasPrecipitation, temp);
+                case SPRING -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp - 0.34f) : new Pair<>(hasPrecipitation, temp);
                 case SUMMER -> new Pair<>(hasPrecipitation, temp + 0.4f);
                 case WINTER -> new Pair<>(true, temp - 0.64f);
-                case FALL -> CONFIG.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.34f);
+                case FALL -> config.isFallAndSpringReversed() ? new Pair<>(hasPrecipitation, temp) : new Pair<>(hasPrecipitation, temp - 0.34f);
             };
         }
     }

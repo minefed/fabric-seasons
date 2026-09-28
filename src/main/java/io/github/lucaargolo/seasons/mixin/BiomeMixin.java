@@ -5,6 +5,7 @@ import io.github.lucaargolo.seasons.mixed.BiomeMixed;
 import io.github.lucaargolo.seasons.resources.FoliageSeasonColors;
 import io.github.lucaargolo.seasons.resources.GrassSeasonColors;
 import io.github.lucaargolo.seasons.utils.ColorsCache;
+import io.github.lucaargolo.seasons.utils.SeasonalWeatherTable;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.MinecraftClient;
@@ -34,6 +35,8 @@ public abstract class BiomeMixin implements BiomeMixed {
     @Shadow protected abstract int getDefaultFoliageColor();
 
     private Biome.Weather originalWeather;
+
+    private SeasonalWeatherTable seasonalWeatherTable;
 
     @SuppressWarnings({"ConstantConditions", "removal", "OptionalAssignedToNull"})
     @Environment(EnvType.CLIENT)
@@ -129,5 +132,15 @@ public abstract class BiomeMixin implements BiomeMixed {
     @Override
     public void setOriginalWeather(Biome.Weather originalWeather) {
         this.originalWeather = originalWeather;
+    }
+
+    @Override
+    public SeasonalWeatherTable getSeasonalWeatherTable() {
+        return this.seasonalWeatherTable;
+    }
+
+    @Override
+    public void setSeasonalWeatherTable(SeasonalWeatherTable seasonalWeatherTable) {
+        this.seasonalWeatherTable = seasonalWeatherTable;
     }
 }
